@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Büşra Kayıkçı Beyond Walls - Architectural Soundscape & Tour</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+
+    <!--CSS-->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div id="side-panel">
+        <div class="header">
+            <h1>Büşra Kayıkçı</h1>
+            <h2 id="dynamic-subtitle">Beyond Walls / Istanbul</h2>
+            <h3>Architectural Soundscapes</h3>
+        </div>
+        
+        <div class="content">
+            <div id="placeholder-text">
+                <img class="intro-image" src="https://lh3.googleusercontent.com/d/1Cux707-l2ruT3AdtKd3AoASkBexvH6hn" referrerpolicy="no-referrer" alt="Büşra Kayıkçı">
+                <div id="dynamic-intro" class="intro-text">
+                    <p>In Beyond Walls, pianist, composer and interior architect Büşra Kayıkçı wanders through place and time to craft her own impressions of global landmarks, with sound, sight and sentiment all as her muse.</p>
+                    <p>Select a pin on the map to navigate through countries and cities to discover the space and hear the music.</p>
+                </div>
+            </div>
+
+            <div id="location-data">
+                <img id="loc-img" class="loc-image" src="" alt="">
+                <h3 id="loc-title" class="loc-title"></h3>
+                <h4 id="loc-subtitle" class="loc-subtitle"></h4>
+                <div id="loc-poetic" class="poetic-phrase"></div>
+                <p id="loc-desc" class="loc-description"></p>
+                
+                <div id="wrapper-tickets" class="media-wrapper" style="display: none;">
+                    <p id="loc-ticket-header">Live Concert</p>
+                    <div class="ticket-address">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                        <span id="loc-address"></span>
+                    </div>
+                    <div id="loc-countdown" class="ticket-countdown">Calculating...</div>
+                    <a id="loc-tickets-btn" href="" target="_blank" class="ticket-btn">Book Tickets</a>
+                </div>
+
+                <div id="wrapper-applemusic" class="media-wrapper" style="display: none;">
+                    <p>Listen on Apple Music</p>
+                    <iframe id="loc-iframe" class="iframe-audio" src="" allow="autoplay *; encrypted-media *; fullscreen *; clipboard-write" sandbox="allow-forms allow-popups allow-same-origin allow-scripts allow-storage-access-by-user-activation allow-top-navigation-by-user-activation"></iframe>
+                </div>
+                <div id="wrapper-youtube" class="media-wrapper" style="display: none;">
+                    <p>Watch on YouTube</p>
+                    <iframe id="loc-video-iframe" class="iframe-video" src="" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+                </div>
+                <div id="wrapper-gdrive-audio" class="media-wrapper" style="display: none;">
+                    <p>Listen now</p>
+                    <iframe id="loc-gdrive-audio" class="gdrive-audio" src="" allow="autoplay; fullscreen" allowfullscreen></iframe>
+                </div>
+                <img id="loc-gdrive-image" class="gdrive-extra-image" src="" alt="Extra image" style="display: none;">
+            </div>
+        </div>
+    </div>
+
+    <div id="map-container">
+        <button id="btn-back">← Back</button>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script>
+        const worldBounds = [[-90, -180], [90, 180]];
+        const map = L.map('map-container', { 
+            zoomControl: true,
+            maxBounds: worldBounds,
+            maxBoundsViscosity: 1.0,
+            minZoom: 3,
+            zoomAnimation: true,
+            fadeAnimation: true,
+            markerZoomAnimation: true
+        });
+        map.zoomControl.setPosition('bottomright');
+
+        /* Tile layer - Stadia*/
+        L.tileLayer(
+            'https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png',
+            {
+                noWrap: true,
+                bounds: worldBounds,
+                keepBuffer: 10,
+                updateWhenIdle: true,
+                maxZoom: 20,
+                attribution: '&copy; OpenStreetMap contributors &copy; Stadia Maps'
+            }
+        ).addTo(map);
+
+        let resizeTimeout;
+        window.addEventListener('resize', () => { 
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => { map.invalidateSize(); }, 150);
+        });
+
+        const abstractIcon = L.divIcon({ className: 'abstract-pin', html: '<div class="pin-dot"></div>', iconSize: [14, 14], iconAnchor: [7, 7] });
+        const redIcon = L.divIcon({ className: 'abstract-pin', html: '<div class="pin-dot-red"></div>', iconSize: [14, 14], iconAnchor: [7, 7] });
+        const blueIcon = L.divIcon({ className: 'abstract-pin', html: '<div class="pin-dot-blue"></div>', iconSize: [14, 14], iconAnchor: [7, 7] });
+
+        const globalNodes = {
+            countries: [
+                { id: 'france', title: 'France', coords: [46.2, 2.2], targetZoom: 6, bounds: [[38, -12], [53, 16]], context: 'France' },
+                { id: 'turkey', title: 'Turkey', coords: [39.0, 35.0], targetZoom: 6, bounds: [[32, 22], [45, 48]], context: 'Turkey' },
+                { id: 'canada', title: 'Canada', coords: [50.0, -80.0], targetZoom: 6, bounds: [[40, -85], [55, -55]], context: 'Canada' } 
+            ],
+            cities: [
+                { id: 'paris', title: 'Paris', coords: [48.8566, 2.3522], targetZoom: 11, bounds: [[48.80, 2.25], [48.95, 2.45]], context: 'Paris' },
+                { id: 'lille', title: 'Lille', coords: [50.6292, 3.0573], targetZoom: 11, bounds: [[50.58, 2.98], [50.68, 3.13]], context: 'Lille' }, 
+                { id: 'baie_st_paul', title: 'Baie-Saint-Paul', coords: [47.445, -70.500], targetZoom: 11, bounds: [[47.40, -70.55], [47.48, -70.45]], context: 'Baie-Saint-Paul' },
+                { id: 'istanbul', title: 'Istanbul', coords: [41.015, 28.978], targetZoom: 13, bounds: [[40.98, 28.93], [41.05, 29.04]], context: 'Istanbul' }
+            ]
+        };
+
+        const venueLocations = {
+            grand_bazaar: {
+                title: "Grand Bazaar", subtitle: "Kapalıçarşı", coords: [41.0107, 28.9680], direction: 'left', offset: [-12, 0],
+                image: "https://images.pexels.com/photos/25205130/pexels-photo-25205130.jpeg", poetic: "“Grand Bazaar's quiet rooftop: where a breathtaking view of Istanbul awaits”",
+                description: "For millions, Istanbul's Grand Bazaar is a historic landmark.<br><br>For me, it’s a childhood labyrinth of beautiful chaos—a frantic river of colors, candies, and people where I felt that if I stopped for a moment, I'd get swept away. But when I climbed onto the bazaar's rooftop during a film shoot, the endless blue sky suddenly opened up, offering a view of half the city and a profound sense of relief.<br><br>I wove these memories and emotions into the track, grounding the chaos with my own field recordings before letting the music break into that vast, open sky.",
+                appleMusicUrl: "https://embed.music.apple.com/bw/song/grand-bazaar/6763337465", youtubeUrl: "https://www.youtube-nocookie.com/embed/yf8n-pa9chc?si=sTOIZDIU-NSaYaQ1" 
+            },
+            sirkeci_post: {
+                title: "Sirkeci Post Office", subtitle: "Büyük Postane", coords: [41.0145, 28.9750], direction: 'right', offset: [12, 0],
+                image: "https://images.pexels.com/photos/20233021/pexels-photo-20233021.jpeg", poetic: "“Traces in the Great Hall”",
+                description: "As Turkey’s largest postal hub, the magnificent Sirkeci Post Office was a historic center for connecting people across long distances. With its sweeping Ottoman Neoclassical arches and intricate tilework, the building echoes with over a century of voices.<br><br>Inspired by its vast, nostalgic atmosphere, I transformed my piano into a soft, distant music box, weaving a lulling melody that reflects the post office’s echoing, high-ceilinged great hall—further enriched by layers of \"old technology\" sounds as a nod to the building’s history as a radio studio.",
+                gdriveAudio: "https://drive.google.com/file/d/1__0isjgrEKUSDTSvfm0yn1padVfcsyZK/preview", gdriveImage: "https://drive.google.com/thumbnail?id=1fmR7zbqNSRjRVd9LnbngjKpZt5WRW5pN&sz=w800"
+            },
+            atik_valide: {
+                title: "Atik Valide Complex", subtitle: "Atik Valide Külliyesi", coords: [41.0186, 29.0233], direction: 'right', offset: [12, 0],
+                image: "https://images.pexels.com/photos/34700932/pexels-photo-34700932.jpeg", poetic: "“A historic hub of faith, healing, and learning”",
+                description: "Nestled atop a hill overlooking busy Istanbul, this 16th-century complex by the architect Sinan originally served as a sanctuary of rest and shelter for locals and travelers alike. The highlight is its Ottoman imperial mosque, built alongside religious centres, educational institutions, and lodging and hospital facilities.<br><br>To capture the literal environment of the space, I gathered field recordings while walking through the stone courtyards and recorded the water sounds from the fountain area. These elements serve to document the unique acoustic character of the site itself, blending the natural atmosphere of the complex with the music.",
+                gdriveAudio: "https://drive.google.com/file/d/1zLTUpGbFNwX5CeiyoJu-clBZ7pSk8IPl/preview", gdriveImage: "https://drive.google.com/thumbnail?id=1gJaHVrQpo_LxtxQMoCA0amUO1Rsbr7HN&sz=w800"
+            },
+            tanpinar_museum: {
+                title: "Tanpınar Museum", subtitle: "Ahmet Hamdi Tanpınar Müzesi", coords: [41.0111, 28.9794], direction: 'right', offset: [12, 0],
+                image: "https://images.pexels.com/photos/31783850/pexels-photo-31783850.jpeg", poetic: "“A walk across the edge of time”",
+                description: "Originally built for the Ottoman sultans and housed in a 19th-century structure bordering Gülhane Park, the Tanpınar Museum is now a quiet library dedicated to the Turkish writer Ahmet Hamdi Tanpınar. It feels like a hidden sanctuary within the busy city.<br><br>In this composition, I wanted to reflect the journey of walking through the bustling district, entering the park, and finding this small building. I began with the piano part first, letting my imagination drift back to the museum's origins as a pavilion for Ottoman sultans to watch soldiers passing by on horseback. I used that rhythm to inspire a distinct motif for my right hand, then transferred myself into modern Türkiye by layering current field recordings from the library and the park directly over the piano.",
+                gdriveAudio: "https://drive.google.com/file/d/1LbzKFHEIJI7N7RAiUsnnLQnouekbbr7d/preview", gdriveImage: "https://drive.google.com/thumbnail?id=1JgAjl8JYCDYlMRMyRrZP4SghQ0wMkLiH&sz=w800"
+            },
+            salt_galata: {
+                title: "Ottoman Bank", subtitle: "SALT Galata", coords: [41.0238, 28.9740], direction: 'right', offset: [12, 0],
+                image: "https://drive.google.com/thumbnail?id=11Lmv1OHzme7FRQzaUC-rYe569yBulGic&sz=w800", poetic: "“Expressing the transformation from secret bank vaults to open cultural space”",
+                description: "Built as the imperial Ottoman Bank and now home to the SALT Galata art center and library, this building presents a fascinating contrast between its past and present. When you walk in, you still see signs of its old life—Ottoman Turkish plates, old money, and documents. But its new function is filled with light, moving away from the dark, secretive atmosphere of hidden vaults and thick walls.<br><br>I felt a strong urge to reflect this shift between mystery and openness in my composition. To evoke the bank's historic darkness and the hidden world of its vaults, I used dense electronic textures, weaving in the sounds of Ottoman-era coins and metal objects as subtle references to the building's financial past. I then contrasted this atmosphere with the light and openness of the modern library, expressed through acoustic piano and field recordings of the life unfolding around it.",
+                appleMusicUrl: "https://embed.music.apple.com/us/song/ottoman-bank-salt-galata/6766743838"
+            },
+            
+            // RED & BLUE TOUR PINS
+            trois_baudets: {
+                title: "Les Trois Baudets", subtitle: "Paris, France", coords: [48.8835, 2.3324], direction: 'right', offset: [12, 0],
+                image: "https://drive.google.com/thumbnail?id=1aUaLlPAW0KojjeQI3CP9CGe-Ip5pzD4Y&sz=w800", 
+                address: "64 Bd de Clichy, 75018 Paris",
+                ticketUrl: "https://busra.lnk.to/connect",
+                eventDate: "2026-06-11T20:00:00+02:00", isBlue: true 
+            },
+            lille_festival: {
+                title: "Lille Pianos Festival", subtitle: "Lille, France", coords: [50.635, 3.060], direction: 'right', offset: [12, 0],
+                image: "https://drive.google.com/thumbnail?id=1qko0K0qWP9BMrh_tlfv-kV5CDgHQJQFR&sz=w800", 
+                address: "3 place Mendès France, Lille",
+                ticketUrl: "https://busra.lnk.to/connect",
+                eventDate: "2026-06-13T20:00:00+02:00", isBlue: true 
+            },
+            festif_bsp: {
+                title: "Le Festif!", subtitle: "Baie-Saint-Paul, QC, Canada", coords: [47.445, -70.500], direction: 'right', offset: [12, 0],
+                image: "https://drive.google.com/thumbnail?id=1dSY3s-w2MXVP6j39EHOZtICUsR68DRB_&sz=w800", 
+                address: "Quai Bell, Baie-Saint-Paul, QC, Canada",
+                ticketUrl: "https://lefestif.ca/artistes/busra-kayikci/",
+                eventDate: "2026-07-25T20:00:00-04:00", isRed: true 
+            }
+        };
+
+        const layerCountries = L.layerGroup();
+        const layerCities = L.layerGroup();
+        const layerCityDetails = L.layerGroup(); 
+
+        let navHistory = [];
+        let currentContext = 'World';
+        let countdownTimer; 
+
+        function startCountdown(dateString) {
+            clearInterval(countdownTimer);
+            const targetDate = new Date(dateString).getTime();
+            const el = document.getElementById('loc-countdown');
+
+            countdownTimer = setInterval(() => {
+                const now = new Date().getTime();
+                const distance = targetDate - now;
+
+                if (distance < 0) {
+                    clearInterval(countdownTimer);
+                    el.innerHTML = "The show has ended!";
+                    return;
+                }
+
+                const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+                const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+                const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+                el.innerHTML = `${days}d ${hours}h ${minutes}m ${seconds}s`;
+            }, 1000);
+        }
+
+        function updateContextPanel(contextName) {
+            currentContext = contextName;
+            document.getElementById('location-data').style.display = 'none';
+            document.getElementById('placeholder-text').style.display = 'block';
+            
+            const intro = document.getElementById('dynamic-intro');
+            if(contextName === 'World') {
+                intro.innerHTML = `<p>In Beyond Walls, pianist, composer and interior architect Büşra Kayıkçı wanders through place and time to craft her own impressions of global landmarks, with sound, sight and sentiment all as her muse.</p><p>Select a pin on the map to navigate through countries and cities to discover the space and hear the music.</p>`;
+            } else {
+                intro.innerHTML = `<p>In Beyond Walls, pianist, composer and interior architect Büşra Kayıkçı wanders through place and time to craft her own impressions of its landmarks, with sound, sight and sentiment all as her muse.</p><p>Explore the sound and select a pin on the map to discover the space and hear the music.</p>`;
+            }
+        }
+
+        function lockRegion(node) {
+            navHistory.push({
+                maxBounds: map.options.maxBounds || worldBounds,
+                viewCoords: map.getCenter(),
+                viewZoom: map.getZoom(), 
+                context: currentContext
+            });
+
+            updateContextPanel(node.context);
+            map.setMaxBounds(null); 
+            map.setView(node.coords, node.targetZoom, { animate: true, duration: 0.95 });
+            
+            setTimeout(() => { map.setMaxBounds(node.bounds); }, 1050); 
+            document.getElementById('btn-back').style.display = 'block';
+        }
+
+        document.getElementById('btn-back').addEventListener('click', () => {
+            if (navHistory.length > 0) {
+                const prevState = navHistory.pop();
+                updateContextPanel(prevState.context);
+                
+                map.setMaxBounds(null);
+                map.setView(prevState.viewCoords, prevState.viewZoom, { animate: true, duration: 0.95 });
+                setTimeout(() => { map.setMaxBounds(prevState.maxBounds); }, 1050);
+            } else {
+                updateContextPanel('World');
+                map.setMaxBounds(null);
+                map.setView([20, 0], 3, { animate: true, duration: 0.95 });
+                setTimeout(() => { map.setMaxBounds(worldBounds); }, 1050);
+            }
+        });
+
+        // HIERARCHY INJECTIONS
+        [globalNodes.countries, globalNodes.cities].forEach((group, index) => {
+            const targetLayer = index === 0 ? layerCountries : layerCities;
+            group.forEach(item => {
+                const marker = L.marker(item.coords, { icon: abstractIcon });
+                marker.bindTooltip(item.title, { permanent: true, direction: 'auto', className: 'hierarchy-label', offset: [5, 0] });
+                marker.on('click', () => lockRegion(item));
+                targetLayer.addLayer(marker);
+            });
+        });
+
+        // ENVIRONMENT LABELS
+        L.marker([41.0272, 28.9730], { icon: L.divIcon({ className: 'neighborhood-label', html: 'GALATA' }) }).addTo(layerCityDetails);
+        L.marker([41.0360, 28.9770], { icon: L.divIcon({ className: 'neighborhood-label', html: 'BEYOĞLU' }) }).addTo(layerCityDetails);
+        L.marker([41.0270, 29.0150], { icon: L.divIcon({ className: 'neighborhood-label', html: 'ÜSKÜDAR' }) }).addTo(layerCityDetails);
+        L.marker([40.9870, 29.0280], { icon: L.divIcon({ className: 'neighborhood-label', html: 'KADIKÖY' }) }).addTo(layerCityDetails);
+        
+        L.marker([41.0205, 29.0050], { icon: L.divIcon({ className: 'water-label', html: 'BOSPHORUS' }) }).addTo(layerCityDetails); 
+        L.marker([41.0220, 28.9520], { icon: L.divIcon({ className: 'water-label', html: 'GOLDEN HORN' }) }).addTo(layerCityDetails);
+        L.marker([40.9880, 28.9550], { icon: L.divIcon({ className: 'water-label', html: 'SEA OF MARMARA' }) }).addTo(layerCityDetails);
+
+        L.marker([48.8650, 2.3000], { icon: L.divIcon({ className: 'city-label', html: 'PARIS' }) }).addTo(layerCityDetails);
+        L.marker([48.8600, 2.3300], { icon: L.divIcon({ className: 'water-label', html: 'SEINE' }) }).addTo(layerCityDetails);
+        L.marker([50.6100, 3.0400], { icon: L.divIcon({ className: 'city-label', html: 'LILLE' }) }).addTo(layerCityDetails);
+        L.marker([47.458, -70.535], { icon: L.divIcon({ className: 'city-label', html: 'BAIE-SAINT-PAUL' }) }).addTo(layerCityDetails);
+
+        for (const key in venueLocations) {
+            const loc = venueLocations[key];
+            let activeIcon = abstractIcon;
+            if (loc.isRed) activeIcon = redIcon;
+            if (loc.isBlue) activeIcon = blueIcon;
+            
+            const marker = L.marker(loc.coords, { icon: activeIcon }).addTo(layerCityDetails);
+            marker.bindTooltip(loc.title, { permanent: true, direction: loc.direction || 'right', className: 'pin-label', offset: loc.offset || [10, 0] });
+            
+            marker.on('click', () => {
+                const contentPanel = document.querySelector('.content');
+                clearInterval(countdownTimer);
+
+                document.getElementById('loc-iframe').src = '';
+                document.getElementById('loc-video-iframe').src = '';
+                document.getElementById('loc-gdrive-audio').src = '';
+                
+                contentPanel.classList.add('fade-out');
+                setTimeout(() => {
+                    document.getElementById('placeholder-text').style.display = 'none';
+                    document.getElementById('location-data').style.display = 'block';
+                    
+                    document.getElementById('loc-img').src = loc.image;
+                    document.getElementById('loc-title').textContent = loc.title;
+                    document.getElementById('loc-subtitle').textContent = loc.subtitle;
+                    
+                    const poeticEl = document.getElementById('loc-poetic');
+                    const descEl = document.getElementById('loc-desc');
+                    
+                    const wrapApplemusic = document.getElementById('wrapper-applemusic');
+                    const wrapYoutube = document.getElementById('wrapper-youtube');
+                    const wrapGdriveAudio = document.getElementById('wrapper-gdrive-audio');
+                    const imgGdrive = document.getElementById('loc-gdrive-image');
+                    const wrapTickets = document.getElementById('wrapper-tickets');
+
+                    if (loc.isRed || loc.isBlue) {
+                        poeticEl.style.display = 'none';
+                        descEl.style.display = 'none';
+                        wrapApplemusic.style.display = 'none'; wrapYoutube.style.display = 'none';
+                        wrapGdriveAudio.style.display = 'none'; imgGdrive.style.display = 'none';
+                        
+                        wrapTickets.style.display = 'block';
+                        
+                        wrapTickets.style.borderLeftColor = loc.isBlue ? '#0077B6' : '#E63946';
+                        document.getElementById('loc-ticket-header').style.color = loc.isBlue ? '#0077B6' : '#E63946';
+                        document.getElementById('loc-ticket-header').textContent = loc.isBlue ? "Past Live Concert" : "Upcoming Live Concert";
+                        
+                        document.getElementById('loc-address').textContent = loc.address;
+                        document.getElementById('loc-tickets-btn').href = loc.ticketUrl;
+                        document.getElementById('loc-tickets-btn').style.backgroundColor = loc.isBlue ? '#0077B6' : '#E63946';
+                        document.getElementById('loc-tickets-btn').textContent = loc.isBlue ? "Connect" : "Book Tickets";
+                        
+                        startCountdown(loc.eventDate); 
+                    } else {
+                        wrapTickets.style.display = 'none';
+                        
+                        poeticEl.textContent = loc.poetic;
+                        poeticEl.style.display = 'block';
+                        descEl.innerHTML = loc.description;
+                        descEl.style.display = 'block';
+
+                        if (loc.appleMusicUrl) {
+                            wrapGdriveAudio.style.display = 'none'; imgGdrive.style.display = 'none';
+                            wrapApplemusic.style.display = 'block';
+                            document.getElementById('loc-iframe').src = loc.appleMusicUrl;
+                            if (loc.youtubeUrl) {
+                                wrapYoutube.style.display = 'block';
+                                document.getElementById('loc-video-iframe').src = loc.youtubeUrl;
+                            } else {
+                                wrapYoutube.style.display = 'none';
+                            }
+                        } else if (loc.gdriveAudio) {
+                            wrapApplemusic.style.display = 'none'; wrapYoutube.style.display = 'none';
+                            wrapGdriveAudio.style.display = 'block'; imgGdrive.style.display = 'block';
+                            document.getElementById('loc-gdrive-audio').src = loc.gdriveAudio;
+                            imgGdrive.src = loc.gdriveImage;
+                        }
+                    }
+                    contentPanel.classList.remove('fade-out');
+                }, 260);
+
+                map.panTo(loc.coords, { animate: true, duration: 0.55 });
+            });
+        }
+
+        // --- ENGIN DE CONFIGURATION ET CYCLE DE ZOOM EXCLUSIF ---
+        map.on('zoomstart', () => {
+            map._prevZoom = map.getZoom();
+        });
+
+        map.on('zoom', () => {
+            const z = map.getZoom();
+            let scale = Math.pow(1.15, z - 13);
+            scale = Math.max(0.7, Math.min(scale, 1.3)); 
+            document.documentElement.style.setProperty('--scale-factor', scale);
+        });
+
+        map.on('zoomend', () => {
+            const z = map.getZoom();
+
+            if (map._prevZoom && z < map._prevZoom) {
+                map.setMaxBounds(worldBounds);
+            }
+
+            if (z < 6) {
+                if (!map.hasLayer(layerCountries)) map.addLayer(layerCountries);
+                if (map.hasLayer(layerCities)) map.removeLayer(layerCities);
+                if (map.hasLayer(layerCityDetails)) map.removeLayer(layerCityDetails);
+            } else if (z >= 6 && z < 11) {
+                if (map.hasLayer(layerCountries)) map.removeLayer(layerCountries);
+                if (!map.hasLayer(layerCities)) map.addLayer(layerCities);
+                if (map.hasLayer(layerCityDetails)) map.removeLayer(layerCityDetails);
+            } else if (z >= 11) {
+                if (map.hasLayer(layerCountries)) map.removeLayer(layerCountries);
+                if (map.hasLayer(layerCities)) map.removeLayer(layerCities);
+                if (!map.hasLayer(layerCityDetails)) map.addLayer(layerCityDetails);
+            }
+
+            if (z > 3 || navHistory.length > 0) {
+                document.getElementById('btn-back').style.display = 'block';
+            } else {
+                document.getElementById('btn-back').style.display = 'none';
+            }
+        });
+
+        map.setView([20, 0], 3);
+        map.setMaxBounds(worldBounds);
+        
+        const initLayers = function() {
+             const z = map.getZoom();
+             if (z < 6) map.addLayer(layerCountries);
+             else if (z >= 6 && z < 11) map.addLayer(layerCities);
+             else if (z >= 11) map.addLayer(layerCityDetails);
+        };
+        initLayers();
+
+    </script>
+</body>
+</html>
