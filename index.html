@@ -5,10 +5,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Büşra Kayıkçı Beyond Walls - Architectural Soundscape & Tour</title>
     
+    <!--Leaflet-->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+    <!--Maplibre-->
+    <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@6.3.0/dist/maplibre-gl.css" crossorigin=""/>
+
+    <!--Font Open Sans-->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300..800;1,300..800&display=swap" rel="stylesheet">
+
+    <!--Import map-->
+    <script type="importmap">
+    {
+      "imports": {
+        "leaflet": "https://unpkg.com/leaflet@1.9.4/dist/leaflet-src.esm.js",
+        "maplibre-gl": "https://unpkg.com/maplibre-gl@6.3.0/dist/maplibre-gl.mjs"
+      }
+    }
+    </script>
 
     <!--CSS-->
     <link rel="stylesheet" href="style.css">
@@ -16,18 +31,21 @@
 <body>
 
     <div id="side-panel">
-        <div class="header">
-            <h1>Büşra Kayıkçı</h1>
-            <h2 id="dynamic-subtitle">Beyond Walls / Istanbul</h2>
-            <h3>Architectural Soundscapes</h3>
+        <div class="map-header">
+            <h1>Beyond Walls | Istanbul</h1>
+            <h2 id="dynamic-subtitle">Architectural Soundscapes</h2>
         </div>
         
         <div class="content">
             <div id="placeholder-text">
-                <img class="intro-image" src="https://lh3.googleusercontent.com/d/1Cux707-l2ruT3AdtKd3AoASkBexvH6hn" referrerpolicy="no-referrer" alt="Büşra Kayıkçı">
                 <div id="dynamic-intro" class="intro-text">
-                    <p>In Beyond Walls, pianist, composer and interior architect Büşra Kayıkçı wanders through place and time to craft her own impressions of global landmarks, with sound, sight and sentiment all as her muse.</p>
-                    <p>Select a pin on the map to navigate through countries and cities to discover the space and hear the music.</p>
+                    <span>In Beyond Walls, pianist, composer and interior architect Büşra Kayıkçı wanders through place and time to craft her own impressions of global landmarks, with sound, sight and sentiment all as her muse.</span>
+                </div>
+                <img class="intro-image" src="https://lh3.googleusercontent.com/d/1Cux707-l2ruT3AdtKd3AoASkBexvH6hn" referrerpolicy="no-referrer" alt="Büşra Kayıkçı">
+                <hr>
+                <div class="select-pin">
+                    <div class="pin-dot"></div>
+                    <span><b>Select a pin on the map</b> to navigate through countries and cities to discover the space and hear the music.</span>
                 </div>
             </div>
 
@@ -66,12 +84,12 @@
     </div>
 
     <div id="map-container">
-        <button id="btn-back">← Back</button>
-    </div>
+</div>
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    
-    <script>
+    <script type="module">
+        import * as L from 'leaflet';
+        import { maplibreGL } from 'https://unpkg.com/@maplibre/maplibre-gl-leaflet@0.1.4/dist/leaflet-maplibre-gl.mjs';
+
         const worldBounds = [[-90, -180], [90, 180]];
         const map = L.map('map-container', { 
             zoomControl: true,
@@ -84,18 +102,89 @@
         });
         map.zoomControl.setPosition('bottomright');
 
-        /* Tile layer - Stadia*/
-        L.tileLayer(
-            'https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png',
-            {
-                noWrap: true,
-                bounds: worldBounds,
-                keepBuffer: 10,
-                updateWhenIdle: true,
-                maxZoom: 20,
-                attribution: '&copy; OpenStreetMap contributors &copy; Stadia Maps'
+        /* Vector basemap - prepare the Stadia style JSON BEFORE creating the layer.
+           This avoids depending on undocumented internal MapLibre properties in the plugin. */
+        const styleUrl = 'https://tiles.stadiamaps.com/styles/alidade_smooth.json';
+        const styleResponse = await fetch(styleUrl);
+        if (!styleResponse.ok) {
+            throw new Error(`Impossibile caricare lo stile Stadia (${styleResponse.status}).`);
+        }
+        const customStyle = await styleResponse.json();
+        // Keep only the desired native label layers. Do not combine MapLibre's
+        // legacy style filters with expression filters: that combination makes
+        // the entire style fail validation on current MapLibre versions.
+        customStyle.layers = customStyle.layers.map(layer => {
+            const id = (layer.id || '').toLowerCase();
+            const sourceLayer = layer['source-layer'];
+
+            if (layer.type === 'background') {
+                layer.paint = { ...(layer.paint || {}), 'background-color': '#F7F4EE' };
             }
-        ).addTo(map);
+
+            if (layer.type === 'fill' && /(water|ocean|sea|lake)/.test(id)) {
+                layer.paint = { ...(layer.paint || {}), 'fill-color': '#E4ECEC' };
+            } else if (layer.type === 'fill' && /(landcover|landuse|park|grass|wood|forest)/.test(id)) {
+                layer.paint = { ...(layer.paint || {}), 'fill-color': '#EEECE5' };
+            } else if (layer.type === 'line' && /(boundary|admin)/.test(id)) {
+                layer.paint = { ...(layer.paint || {}), 'line-color': '#D3CEC4' };
+            } else if (layer.type === 'line' && /(transportation|road|street|bridge|tunnel)/.test(id)) {
+                layer.paint = { ...(layer.paint || {}), 'line-color': '#D8D4CC' };
+            }
+
+            if (layer.type !== 'symbol') return layer;
+
+            const isPlaceLabel = sourceLayer === 'place';
+            const isWaterLabel = sourceLayer === 'water_name' || /water.*(label|name)|(label|name).*water/.test(id);
+
+            // Hide all other native labels (roads, POIs, shops, transit, etc.).
+            if (!isPlaceLabel && !isWaterLabel) {
+                layer.layout = { ...(layer.layout || {}), visibility: 'none' };
+                return layer;
+            }
+
+            if (isPlaceLabel) {
+                const isSuburbLayer = /suburb/.test(id);
+                const wantedPlaceLayer =
+                    /(country|city|town|village)/.test(id);
+
+                if (!wantedPlaceLayer && !isSuburbLayer) {
+                    layer.layout = {
+                        ...(layer.layout || {}),
+                        visibility: 'none'
+                    };
+                    return layer;
+                }
+
+                if (isSuburbLayer) {
+                    layer.minzoom = 14;
+                }
+            }
+
+            layer.layout = {
+                ...(layer.layout || {}),
+                visibility: 'visible',
+                'text-field': [
+                    'coalesce',
+                    ['get', 'name:en'],
+                    ['get', 'name:latin'],
+                    ['get', 'name']
+                ]
+            };
+            layer.paint = {
+                ...(layer.paint || {}),
+                'text-color': isWaterLabel ? '#71868B' : '#57534E',
+                'text-halo-color': '#F7F4EE',
+                'text-halo-width': 1.25,
+                'text-halo-blur': 0.2
+            };
+            return layer;
+        });
+
+        const vectorLayer = maplibreGL({
+            style: customStyle,
+            attribution: '&copy; <a href="https://stadiamaps.com/attribution/" target="_blank">Stadia Maps</a>, &copy; <a href="https://openmaptiles.org/" target="_blank">OpenMapTiles</a>, &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>'
+        });
+        vectorLayer.addTo(map);
 
         let resizeTimeout;
         window.addEventListener('resize', () => { 
@@ -108,15 +197,8 @@
         const blueIcon = L.divIcon({ className: 'abstract-pin', html: '<div class="pin-dot-blue"></div>', iconSize: [14, 14], iconAnchor: [7, 7] });
 
         const globalNodes = {
-            countries: [
-                { id: 'france', title: 'France', coords: [46.2, 2.2], targetZoom: 6, bounds: [[38, -12], [53, 16]], context: 'France' },
-                { id: 'turkey', title: 'Turkey', coords: [39.0, 35.0], targetZoom: 6, bounds: [[32, 22], [45, 48]], context: 'Turkey' },
-                { id: 'canada', title: 'Canada', coords: [50.0, -80.0], targetZoom: 6, bounds: [[40, -85], [55, -55]], context: 'Canada' } 
-            ],
+            countries: [],
             cities: [
-                { id: 'paris', title: 'Paris', coords: [48.8566, 2.3522], targetZoom: 11, bounds: [[48.80, 2.25], [48.95, 2.45]], context: 'Paris' },
-                { id: 'lille', title: 'Lille', coords: [50.6292, 3.0573], targetZoom: 11, bounds: [[50.58, 2.98], [50.68, 3.13]], context: 'Lille' }, 
-                { id: 'baie_st_paul', title: 'Baie-Saint-Paul', coords: [47.445, -70.500], targetZoom: 11, bounds: [[47.40, -70.55], [47.48, -70.45]], context: 'Baie-Saint-Paul' },
                 { id: 'istanbul', title: 'Istanbul', coords: [41.015, 28.978], targetZoom: 13, bounds: [[40.98, 28.93], [41.05, 29.04]], context: 'Istanbul' }
             ]
         };
@@ -181,8 +263,6 @@
         const layerCities = L.layerGroup();
         const layerCityDetails = L.layerGroup(); 
 
-        let navHistory = [];
-        let currentContext = 'World';
         let countdownTimer; 
 
         function startCountdown(dateString) {
@@ -209,76 +289,20 @@
             }, 1000);
         }
 
-        function updateContextPanel(contextName) {
-            currentContext = contextName;
-            document.getElementById('location-data').style.display = 'none';
-            document.getElementById('placeholder-text').style.display = 'block';
-            
-            const intro = document.getElementById('dynamic-intro');
-            if(contextName === 'World') {
-                intro.innerHTML = `<p>In Beyond Walls, pianist, composer and interior architect Büşra Kayıkçı wanders through place and time to craft her own impressions of global landmarks, with sound, sight and sentiment all as her muse.</p><p>Select a pin on the map to navigate through countries and cities to discover the space and hear the music.</p>`;
-            } else {
-                intro.innerHTML = `<p>In Beyond Walls, pianist, composer and interior architect Büşra Kayıkçı wanders through place and time to craft her own impressions of its landmarks, with sound, sight and sentiment all as her muse.</p><p>Explore the sound and select a pin on the map to discover the space and hear the music.</p>`;
-            }
-        }
-
-        function lockRegion(node) {
-            navHistory.push({
-                maxBounds: map.options.maxBounds || worldBounds,
-                viewCoords: map.getCenter(),
-                viewZoom: map.getZoom(), 
-                context: currentContext
-            });
-
-            updateContextPanel(node.context);
-            map.setMaxBounds(null); 
-            map.setView(node.coords, node.targetZoom, { animate: true, duration: 0.95 });
-            
-            setTimeout(() => { map.setMaxBounds(node.bounds); }, 1050); 
-            document.getElementById('btn-back').style.display = 'block';
-        }
-
-        document.getElementById('btn-back').addEventListener('click', () => {
-            if (navHistory.length > 0) {
-                const prevState = navHistory.pop();
-                updateContextPanel(prevState.context);
-                
-                map.setMaxBounds(null);
-                map.setView(prevState.viewCoords, prevState.viewZoom, { animate: true, duration: 0.95 });
-                setTimeout(() => { map.setMaxBounds(prevState.maxBounds); }, 1050);
-            } else {
-                updateContextPanel('World');
-                map.setMaxBounds(null);
-                map.setView([20, 0], 3, { animate: true, duration: 0.95 });
-                setTimeout(() => { map.setMaxBounds(worldBounds); }, 1050);
-            }
+        // ISTANBUL NAVIGATION PIN
+        const istanbulNode = globalNodes.cities.find(item => item.id === 'istanbul');
+        const istanbulMarker = L.marker(istanbulNode.coords, { icon: abstractIcon });
+        istanbulMarker.bindTooltip('Istanbul', {
+            permanent: true,
+            direction: 'auto',
+            className: 'hierarchy-label',
+            offset: [5, 0]
         });
-
-        // HIERARCHY INJECTIONS
-        [globalNodes.countries, globalNodes.cities].forEach((group, index) => {
-            const targetLayer = index === 0 ? layerCountries : layerCities;
-            group.forEach(item => {
-                const marker = L.marker(item.coords, { icon: abstractIcon });
-                marker.bindTooltip(item.title, { permanent: true, direction: 'auto', className: 'hierarchy-label', offset: [5, 0] });
-                marker.on('click', () => lockRegion(item));
-                targetLayer.addLayer(marker);
-            });
+        istanbulMarker.on('click', () => {
+            map.setMaxBounds([[40.98, 28.93], [41.05, 29.04]]);
+            map.setView([41.015, 28.978], 13, { animate: true, duration: 0.95 });
         });
-
-        // ENVIRONMENT LABELS
-        L.marker([41.0272, 28.9730], { icon: L.divIcon({ className: 'neighborhood-label', html: 'GALATA' }) }).addTo(layerCityDetails);
-        L.marker([41.0360, 28.9770], { icon: L.divIcon({ className: 'neighborhood-label', html: 'BEYOĞLU' }) }).addTo(layerCityDetails);
-        L.marker([41.0270, 29.0150], { icon: L.divIcon({ className: 'neighborhood-label', html: 'ÜSKÜDAR' }) }).addTo(layerCityDetails);
-        L.marker([40.9870, 29.0280], { icon: L.divIcon({ className: 'neighborhood-label', html: 'KADIKÖY' }) }).addTo(layerCityDetails);
-        
-        L.marker([41.0205, 29.0050], { icon: L.divIcon({ className: 'water-label', html: 'BOSPHORUS' }) }).addTo(layerCityDetails); 
-        L.marker([41.0220, 28.9520], { icon: L.divIcon({ className: 'water-label', html: 'GOLDEN HORN' }) }).addTo(layerCityDetails);
-        L.marker([40.9880, 28.9550], { icon: L.divIcon({ className: 'water-label', html: 'SEA OF MARMARA' }) }).addTo(layerCityDetails);
-
-        L.marker([48.8650, 2.3000], { icon: L.divIcon({ className: 'city-label', html: 'PARIS' }) }).addTo(layerCityDetails);
-        L.marker([48.8600, 2.3300], { icon: L.divIcon({ className: 'water-label', html: 'SEINE' }) }).addTo(layerCityDetails);
-        L.marker([50.6100, 3.0400], { icon: L.divIcon({ className: 'city-label', html: 'LILLE' }) }).addTo(layerCityDetails);
-        L.marker([47.458, -70.535], { icon: L.divIcon({ className: 'city-label', html: 'BAIE-SAINT-PAUL' }) }).addTo(layerCityDetails);
+        layerCities.addLayer(istanbulMarker);
 
         for (const key in venueLocations) {
             const loc = venueLocations[key];
@@ -297,12 +321,20 @@
                 document.getElementById('loc-video-iframe').src = '';
                 document.getElementById('loc-gdrive-audio').src = '';
                 
+                // Nasconde subito il contenuto precedente durante il cambio pin.
+                const locationData = document.getElementById('location-data');
+                const locImg = document.getElementById('loc-img');
+                locationData.style.visibility = 'hidden';
+                locImg.src = '';
+
                 contentPanel.classList.add('fade-out');
                 setTimeout(() => {
                     document.getElementById('placeholder-text').style.display = 'none';
-                    document.getElementById('location-data').style.display = 'block';
+                    locationData.style.display = 'block';
                     
-                    document.getElementById('loc-img').src = loc.image;
+                    locImg.src = loc.image;
+                    locImg.alt = loc.title;
+                    locationData.style.visibility = 'visible';
                     document.getElementById('loc-title').textContent = loc.title;
                     document.getElementById('loc-subtitle').textContent = loc.subtitle;
                     
@@ -380,39 +412,24 @@
         map.on('zoomend', () => {
             const z = map.getZoom();
 
-            if (map._prevZoom && z < map._prevZoom) {
-                map.setMaxBounds(worldBounds);
-            }
-
-            if (z < 6) {
-                if (!map.hasLayer(layerCountries)) map.addLayer(layerCountries);
-                if (map.hasLayer(layerCities)) map.removeLayer(layerCities);
-                if (map.hasLayer(layerCityDetails)) map.removeLayer(layerCityDetails);
-            } else if (z >= 6 && z < 11) {
+            if (z < 11) {
                 if (map.hasLayer(layerCountries)) map.removeLayer(layerCountries);
                 if (!map.hasLayer(layerCities)) map.addLayer(layerCities);
                 if (map.hasLayer(layerCityDetails)) map.removeLayer(layerCityDetails);
-            } else if (z >= 11) {
+            } else {
                 if (map.hasLayer(layerCountries)) map.removeLayer(layerCountries);
                 if (map.hasLayer(layerCities)) map.removeLayer(layerCities);
                 if (!map.hasLayer(layerCityDetails)) map.addLayer(layerCityDetails);
             }
-
-            if (z > 3 || navHistory.length > 0) {
-                document.getElementById('btn-back').style.display = 'block';
-            } else {
-                document.getElementById('btn-back').style.display = 'none';
-            }
         });
 
-        map.setView([20, 0], 3);
-        map.setMaxBounds(worldBounds);
+        map.setView([41.015, 28.978], 13);
+        map.setMaxBounds([[40.98, 28.93], [41.05, 29.04]]);
         
         const initLayers = function() {
              const z = map.getZoom();
-             if (z < 6) map.addLayer(layerCountries);
-             else if (z >= 6 && z < 11) map.addLayer(layerCities);
-             else if (z >= 11) map.addLayer(layerCityDetails);
+             if (z < 11) map.addLayer(layerCities);
+             else map.addLayer(layerCityDetails);
         };
         initLayers();
 
